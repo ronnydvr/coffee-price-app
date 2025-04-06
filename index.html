@@ -17,7 +17,7 @@
 
     <script>
         async function fetchPrice() {
-            const response = await fetch('price.json');
+            const response = await fetch('/.netlify/functions/getPrice');
             const data = await response.json();
             document.getElementById('coffee-price').textContent = data.coffeePrice + ' שקל';
         }
@@ -39,13 +39,12 @@
             const data = await response.json();
             updateMessage.textContent = data.message;
 
-            // לאחר העדכון (המדמה), נטען מחדש את המחיר (בפועל עדיין מהקובץ הסטטי)
-            fetchPrice();
-            newPriceInput.value = ''; // נקה את השדה
+            fetchPrice(); // טען מחדש את המחיר לאחר העדכון
+            newPriceInput.value = '';
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            fetchPrice();
+            fetchPrice(); // טען את המחיר בעת טעינת הדף
             const form = document.getElementById('update-price-form');
             form.addEventListener('submit', updatePrice);
         });
