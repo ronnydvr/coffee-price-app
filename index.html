@@ -1,53 +1,427 @@
 <!DOCTYPE html>
-<html>
+<html lang="he" dir="rtl">
 <head>
-    <title>מחיר קפה</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+            direction: rtl;
+        }
+
+        .top-buttons {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            position: sticky;
+            top: 0;
+            background-color: #f5f5f5;
+            padding: 10px 0;
+            z-index: 100;
+        }
+
+        .top-buttons button {
+            flex: 1;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .task-container {
+            display: flex;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .task-checkbox {
+            width: 25px;
+            height: 25px;
+            border: 2px solid #4CAF50;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-left: 10px;
+            flex-shrink: 0;
+        }
+
+        .task-checkbox.checked {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .task-input, .subject-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .task-input.completed {
+            text-decoration: line-through;
+            color: #888;
+        }
+
+        .subject-input {
+            background-color: #e0e0e0; /* Light gray background */
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
+    <meta name="google-signin-client_id" content="14841161876-uu5ddeetusqhnoqgpo4as20as0v0fg3j.apps.googleusercontent.com">
 </head>
 <body>
-    <h1>מחיר הקפה:</h1>
-    <p id="coffee-price">טוען...</p>
+    <div class="top-buttons">
+        <button id="btnAdd">הוסף משימה</button>
+        <button id="btnAddSubject">הוסף נושא</button>
+        <button id="btnDelete">מחק</button>
+        <button id="btnExport">שמור ל-GitHub</button>
+        <input type="file" id="fileInput" accept=".csv" style="display: none;">
+        <button id="btnImportLocal">ייבא CSV מקומי</button>
+        <button id="btnFullScreen">מסך מלא</button>
+        <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark" data-scope="https://www.googleapis.com/auth/drive.file"></div>
+        <button id="btnImportDrive" style="display: none;">ייבא CSV מ-Google Drive</button>
+        <button id="btnSignOut" style="display: none;">התנתק</button>
+    </div>
 
-    <h2>עדכן מחיר</h2>
-    <form id="update-price-form">
-        <label for="new-price-input">מחיר חדש:</label>
-        <input type="number" id="new-price-input" name="newPrice" required>
-        <button type="submit">עדכן</button>
-        <p id="update-message"></p>
-    </form>
+    <div id="tasksList"></div>
 
     <script>
-        async function fetchPrice() {
-            const response = await fetch('/.netlify/functions/getPrice');
-            const data = await response.json();
-            document.getElementById('coffee-price').textContent = data.coffeePrice + ' שקל';
+        let tasks = [];
+        let activeInput = null;
+        const tasksList = document.getElementById('tasksList');
+        const btnAdd = document.getElementById('btnAdd');
+        const btnAddSubject = document.getElementById('btnAddSubject');
+        const btnDelete = document.getElementById('btnDelete');
+        const btnSaveGitHub = document.getElementById('btnExport'); // Renamed variable
+        const btnImportLocal = document.getElementById('btnImportLocal');
+        const fileInput = document.getElementById('fileInput');
+        const btnFullScreen = document.getElementById('btnFullScreen');
+        const btnImportDrive = document.getElementById('btnImportDrive');
+        const btnSignOut = document.getElementById('btnSignOut');
+        // **חשוב:** החלף את YOUR_CLIENT_ID במזהה הלקוח OAuth 2.0 שלך
+        const CLIENT_ID = 'const CLIENT_ID';
+        const DRIVE_FILE_NAME = 'list.csv';
+        let googleUser;
+        let accessToken;
+
+        function requestFullScreen() {
+            const element = document.documentElement;
+            if (element.requestFullscreen) {
+                element.requestFullscreen();
+            } else if (element.mozRequestFullScreen) { /* Firefox */
+                element.mozRequestFullScreen();
+            } else if (element.webkitRequestFullscreen) { /* Chrome, Safari & Opera */
+                element.webkitRequestFullscreen();
+            } else if (element.msRequestFullscreen) { /* IE/Edge */
+                element.msRequestFullscreen();
+            }
         }
 
-        async function updatePrice(event) {
-            event.preventDefault();
-            const newPriceInput = document.getElementById('new-price-input');
-            const newPrice = newPriceInput.value;
-            const updateMessage = document.getElementById('update-message');
+        function exitFullScreen() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.mozCancelFullScreen) { /* Firefox */
+                document.mozCancelFullScreen();
+            } else if (document.webkitExitFullscreen) { /* Chrome, Safari & Opera */
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE/Edge */
+                document.msExitFullscreen();
+            }
+        }
 
-            const response = await fetch('/.netlify/functions/updatePrice', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ newPrice }),
+        function isFullScreen() {
+            return !!(document.fullscreenElement || document.mozFullScreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+        }
+
+        window.onload = function() {
+            gapi.load('auth2', function() {
+                gapi.auth2.init({
+                    client_id: CLIENT_ID,
+                    scope: 'https://www.googleapis.com/auth/drive.file'
+                });
+            });
+            btnFullScreen.click(); // בקשה למסך מלא בעת טעינה
+            loadTasksFromGitHub(); // Load tasks from GitHub on page load
+        };
+
+        btnFullScreen.addEventListener('click', () => {
+            if (!isFullScreen()) {
+                requestFullScreen();
+                btnFullScreen.textContent = 'צא ממסך מלא';
+            } else {
+                exitFullScreen();
+                btnFullScreen.textContent = 'מסך מלא';
+            }
+        });
+
+        function onSignIn(user) {
+            googleUser = user;
+            accessToken = googleUser.getAuthResponse().access_token;
+            console.log('User signed in!');
+            // הצגת כפתור ייבוא מ-Drive והתנתקות
+            document.querySelector('.g-signin2').style.display = 'none';
+            btnImportDrive.style.display = 'block';
+            btnSignOut.style.display = 'block';
+            loadTasksFromDrive();
+        }
+
+        function signOut() {
+            var auth2 = gapi.auth2.getAuthInstance();
+            auth2.signOut().then(function () {
+                console.log('User signed out.');
+                googleUser = null;
+                accessToken = null;
+                // החזרת כפתור ההתחברות והסתרת כפתורי Drive
+                document.querySelector('.g-signin2').style.display = 'block';
+                btnImportDrive.style.display = 'none';
+                btnSignOut.style.display = 'none';
+                tasks = [];
+                renderTasks();
+                // טעינה מקובץ מקומי כברירת מחדל לאחר התנתקות (אופציונלי)
+                loadTasksFromCSV('./list.csv?t=' + Date.now());
+            });
+        }
+
+        function loadTasksFromDrive() {
+            if (!accessToken) {
+                console.error('No access token available.');
+                alert('אנא התחבר ל-Google Drive.');
+                return;
+            }
+
+            gapi.client.load('drive', 'v3', function() {
+                const request = gapi.client.drive.files.list({
+                    q: `name='${DRIVE_FILE_NAME}' and mimeType='text/csv'`,
+                    spaces: 'drive',
+                    fields: 'files(id, name)'
+                });
+
+                request.execute(function(response) {
+                    if (response.files && response.files.length > 0) {
+                        const fileId = response.files[0].id;
+                        downloadFileFromDrive(fileId);
+                    } else {
+                        console.log(`File '${DRIVE_FILE_NAME}' not found in Google Drive.`);
+                        tasks = [];
+                        renderTasks();
+                        alert(`קובץ '${DRIVE_FILE_NAME}' לא נמצא ב-Google Drive שלך. האפליקציה תתחיל עם רשימה ריקה.`);
+                    }
+                });
+            });
+        }
+
+        function downloadFileFromDrive(fileId) {
+            const request = gapi.client.drive.files.get({
+                fileId: fileId,
+                alt: 'media'
             });
 
-            const data = await response.json();
-            updateMessage.textContent = data.message;
-
-            fetchPrice(); // טען מחדש את המחיר לאחר העדכון
-            newPriceInput.value = '';
+            request.execute(function(response) {
+                if (response) {
+                    processCSVData(response);
+                } else {
+                    console.error('Failed to download file from Drive.');
+                    alert('אירעה שגיאה בעת הורדת הקובץ מ-Google Drive.');
+                }
+            });
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchPrice(); // טען את המחיר בעת טעינת הדף
-            const form = document.getElementById('update-price-form');
-            form.addEventListener('submit', updatePrice);
+        function processCSVData(csvData) {
+            const lines = csvData.split('\n').filter(line => line.trim() !== '');
+            tasks = [];
+            lines.forEach(line => {
+                const values = line.split(',');
+                values.forEach(value => {
+                    const trimmedValue = value.trim();
+                    if (trimmedValue.startsWith('#')) {
+                        tasks.push({ type: 'subject', id: Date.now() + Math.random(), text: trimmedValue });
+                    } else {
+                        tasks.push({ type: 'task', id: Date.now() + Math.random(), text: trimmedValue, completed: false });
+                    }
+                });
+            });
+            renderTasks();
+        }
+
+        function createTaskElement(task, index) {
+            const taskContainer = document.createElement('div');
+            taskContainer.classList.add('task-container');
+            taskContainer.dataset.index = index;
+            taskContainer.addEventListener('click', () => {
+                activeInput = taskContainer;
+            });
+
+            const checkbox = document.createElement('div');
+            checkbox.classList.add('task-checkbox');
+            checkbox.classList.toggle('checked', task.completed);
+            checkbox.innerHTML = task.completed ? '&#10003;' : '';
+            checkbox.addEventListener('click', (event) => {
+                event.stopPropagation();
+                task.completed = !task.completed;
+                checkbox.classList.toggle('checked', task.completed);
+                const inputField = taskContainer.querySelector('.task-input');
+                if (inputField) {
+                    inputField.classList.toggle('completed', task.completed);
+                }
+            });
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.classList.add('task-input');
+            input.value = task.text;
+            input.classList.toggle('completed', task.completed);
+            input.addEventListener('input', (e) => {
+                tasks[index].text = e.target.value;
+            });
+            input.addEventListener('focus', () => {
+                activeInput = taskContainer;
+            });
+
+            taskContainer.appendChild(checkbox);
+            taskContainer.appendChild(input);
+            return taskContainer;
+        }
+
+        function createSubjectElement(subject, index) {
+            const subjectContainer = document.createElement('div');
+            subjectContainer.classList.add('task-container');
+            subjectContainer.dataset.index = index;
+            subjectContainer.addEventListener('click', () => {
+                activeInput = subjectContainer;
+            });
+
+            const subjectInput = document.createElement('input');
+            subjectInput.type = 'text';
+            subjectInput.classList.add('subject-input');
+            subjectInput.value = subject.text;
+            subjectInput.addEventListener('input', (e) => {
+                tasks[index].text = e.target.value;
+            });
+            subjectInput.addEventListener('focus', () => {
+                activeInput = subjectContainer;
+            });
+
+            // Add a spacer or visual cue for subjects if needed
+            const spacer = document.createElement('div');
+            spacer.style.width = '25px'; // Adjust as needed
+            spacer.style.marginRight = '10px';
+
+            subjectContainer.appendChild(spacer);
+            subjectContainer.appendChild(subjectInput);
+            return subjectContainer;
+        }
+
+        function renderTasks() {
+            tasksList.innerHTML = '';
+            tasks.forEach((item, index) => {
+                if (item.type === 'task') {
+                    tasksList.appendChild(createTaskElement(item, index));
+                } else if (item.type === 'subject') {
+                    tasksList.appendChild(createSubjectElement(item, index));
+                }
+            });
+        }
+
+        async function loadTasksFromGitHub() {
+            try {
+                const response = await fetch('/.netlify/functions/loadTasksFromGitHub');
+                if (!response.ok) {
+                    console.error('Failed to load tasks from GitHub:', response.status);
+                    alert('אירעה שגיאה בטעינת המשימות מ-GitHub.');
+                    return;
+                }
+                const csvData = await response.text();
+                processCSVData(csvData);
+            } catch (error) {
+                console.error('Error loading tasks from GitHub:', error);
+                alert('אירעה שגיאה בטעינת המשימות מ-GitHub.');
+            }
+        }
+
+        function exportTasksToCSVString() {
+            let csvContent = "";
+            tasks.forEach(item => {
+                csvContent += item.text + "\n";
+            });
+            return csvContent;
+        }
+
+        async function saveTasksToGitHub() {
+            try {
+                const csvData = exportTasksToCSVString();
+                const response = await fetch('/.netlify/functions/saveTasksToGitHub', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain; charset=utf-8',
+                    },
+                    body: csvData,
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Failed to save tasks to GitHub:', response.status, errorText);
+                    alert('אירעה שגיאה בשמירת המשימות ל-GitHub.');
+                    return;
+                }
+                alert('המשימות נשמרו בהצלחה ל-GitHub!');
+            } catch (error) {
+                console.error('Error saving tasks to GitHub:', error);
+                alert('אירעה שגיאה בשמירת המשימות ל-GitHub.');
+            }
+        }
+
+        function loadTasksFromCSV(url) {
+            fetch(url)
+                .then(response => response.text())
+                .then(csvData => processCSVData(csvData))
+                .catch(error => console.error('Error loading CSV:', error));
+        }
+
+        function importTasksFromCSV(file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                processCSVData(event.target.result);
+            };
+            reader.readAsText(file);
+        }
+
+        btnAdd.addEventListener('click', () => {
+            const insertAfterElement = activeInput || tasksList.lastElementChild;
+            const newTask = { type: 'task', id: Date.now() + Math.random(), text: '', completed: false };
+            const indexToInsert = insertAfterElement ? parseInt(insertAfterElement.dataset.index, 10) + 1 : tasks.length;
+            tasks.splice(indexToInsert, 0, newTask);
+            renderTasks();
+            const newTaskElement = tasksList.children[indexToInsert];
+            if (newTaskElement && newTaskElement.querySelector('.task-input')) {
+                newTaskElement.querySelector('.task-input').focus();
+                activeInput = newTaskElement;
+            }
         });
-    </script>
-</body>
-</html>
+
+        btnAddSubject.addEventListener('click', () => {
+            const subjectText = prompt('הזן את שם הנושא:');
+            if (subjectText !== null && subjectText.trim() !== '') {
+                const insertAfterElement = activeInput || tasksList.lastElementChild;
+                const newSubject = { type: 'subject', id: Date.now() + Math.random(), text: '#' + subjectText.trim() };
+                const indexToInsert = insertAfterElement ? parseInt(insertAfterElement.dataset.index, 10) + 1 : tasks.length;
+                tasks.splice(indexToInsert, 0, newSubject);
+                renderTasks();
+                const newSubjectElement = tasksList.children[indexToInsert];
+                if (newSubjectElement && newSubjectElement.querySelector('.subject-input')) {
+                    newSubjectElement.querySelector('.subject-input').focus();
+                    activeInput = newSubjectElement;
+                }
+            }
+        });
+
+        btnDelete.addEventListener
