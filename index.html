@@ -350,15 +350,25 @@
         });
 
         btnDelete.addEventListener('click', () => {
+            console.log('Delete button clicked!');
             const selectedTasks = Array.from(tasksList.children)
                 .filter(taskElement => taskElement.querySelector('.task-checkbox.checked'));
-            selectedTasks.forEach(taskElement => {
-                const indexToDelete = parseInt(taskElement.dataset.index, 10);
-                if (!isNaN(indexToDelete)) {
-                    tasks.splice(indexToDelete, 1);
-                }
+            console.log('Selected Tasks:', selectedTasks);
+
+            const indicesToDelete = selectedTasks.map(taskElement => parseInt(taskElement.dataset.index, 10))
+                .filter(index => !isNaN(index))
+                .sort((a, b) => b - a); // Sort in descending order
+
+            console.log('Indices to Delete (sorted):', indicesToDelete);
+
+            indicesToDelete.forEach(indexToDelete => {
+                console.log('Tasks array before splice:', tasks);
+                tasks.splice(indexToDelete, 1);
+                console.log('Tasks array after splice:', tasks);
             });
+
             renderTasks();
+            console.log('Tasks after render:', tasks);
         });
 
         btnSaveGitHub.addEventListener('click', () => {
