@@ -87,11 +87,13 @@
         <input type="file" id="fileInput" accept=".csv" style="display: none;">
         <button id="btnImportLocal">ייבא CSV מקומי</button>
         <button id="btnFullScreen">מסך מלא</button>
-        </div>
+    </div>
 
     <div id="tasksList"></div>
 
     <script>
+        console.log('JavaScript block started'); // Debugging line
+
         let tasks = [];
         let activeInput = null;
         const tasksList = document.getElementById('tasksList');
@@ -159,78 +161,6 @@
                 btnFullScreen.textContent = 'מסך מלא';
             }
         });
-
-        // function onSignIn(user) {
-        //     googleUser = user;
-        //     accessToken = googleUser.getAuthResponse().access_token;
-        //     console.log('User signed in!');
-        //     // הצגת כפתור ייבוא מ-Drive והתנתקות
-        //     document.querySelector('.g-signin2').style.display = 'none';
-        //     btnImportDrive.style.display = 'block';
-        //     btnSignOut.style.display = 'block';
-        //     loadTasksFromDrive();
-        // }
-
-        // function signOut() {
-        //     var auth2 = gapi.auth2.getAuthInstance();
-        //     auth2.signOut().then(function () {
-        //         console.log('User signed out.');
-        //         googleUser = null;
-        //         accessToken = null;
-        //         // החזרת כפתור ההתחברות והסתרת כפתורי Drive
-        //         document.querySelector('.g-signin2').style.display = 'block';
-        //         btnImportDrive.style.display = 'none';
-        //         btnSignOut.style.display = 'none';
-        //         tasks = [];
-        //         renderTasks();
-        //         // טעינה מקובץ מקומי כברירת מחדל לאחר התנתקות (אופציונלי)
-        //         loadTasksFromCSV('./list.csv?t=' + Date.now());
-        //     });
-        // }
-
-        // function loadTasksFromDrive() {
-        //     if (!accessToken) {
-        //         console.error('No access token available.');
-        //         alert('אנא התחבר ל-Google Drive.');
-        //         return;
-        //     }
-
-        //     gapi.client.load('drive', 'v3', function() {
-        //         const request = gapi.client.drive.files.list({
-        //             q: `name='${DRIVE_FILE_NAME}' and mimeType='text/csv'`,
-        //             spaces: 'drive',
-        //             fields: 'files(id, name)'
-        //         });
-
-        //         request.execute(function(response) {
-        //             if (response.files && response.files.length > 0) {
-        //                 const fileId = response.files[0].id;
-        //                 downloadFileFromDrive(fileId);
-        //             } else {
-        //                 console.log(`File '${DRIVE_FILE_NAME}' not found in Google Drive.`);
-        //                 tasks = [];
-        //                 renderTasks();
-        //                 alert(`קובץ '${DRIVE_FILE_NAME}' לא נמצא ב-Google Drive שלך. האפליקציה תתחיל עם רשימה ריקה.`);
-        //             }
-        //         });
-        //     });
-        // }
-
-        // function downloadFileFromDrive(fileId) {
-        //     const request = gapi.client.drive.files.get({
-        //         fileId: fileId,
-        //         alt: 'media'
-        //     });
-
-        //     request.execute(function(response) {
-        //         if (response) {
-        //             processCSVData(response);
-        //         } else {
-        //             console.error('Failed to download file from Drive.');
-        //             alert('אירעה שגיאה בעת הורדת הקובץ מ-Google Drive.');
-        //         }
-        //     });
-        // }
 
         function processCSVData(csvData) {
             const lines = csvData.split('\n').filter(line => line.trim() !== '');
@@ -408,4 +338,29 @@
             if (subjectText !== null && subjectText.trim() !== '') {
                 const insertAfterElement = activeInput || tasksList.lastElementChild;
                 const newSubject = { type: 'subject', id: Date.now() + Math.random(), text: '#' + subjectText.trim() };
-                const indexToInsert = insertAfterElement ? parseInt(insertAfterElement.dataset.index,
+                const indexToInsert = insertAfterElement ? parseInt(insertAfterElement.dataset.index, 10) + 1 : tasks.length;
+                tasks.splice(indexToInsert, 0, newSubject);
+                renderTasks();
+                const newSubjectElement = tasksList.children[indexToInsert];
+                if (newSubjectElement && newSubjectElement.querySelector('.subject-input')) {
+                    newSubjectElement.querySelector('.subject-input').focus();
+                    activeInput = newSubjectElement;
+                }
+            }
+        });
+
+        btnDelete.addEventListener('click', () => {
+            const selectedTasks = Array.from(tasksList.children)
+                .filter(taskElement => taskElement.querySelector('.task-checkbox.checked'));
+            selectedTasks.forEach(taskElement => {
+                const indexToDelete = parseInt(taskElement.dataset.index, 10);
+                if (!isNaN(indexToDelete)) {
+                    tasks.splice(indexToDelete, 1);
+                }
+            });
+            renderTasks();
+        });
+
+    </script>
+</body>
+</html>
