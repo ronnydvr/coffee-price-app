@@ -148,7 +148,7 @@
             //         scope: 'https://www.googleapis.com/auth/drive.file'
             //     });
             // });
-            btnFullScreen.click(); // בקשה למסך מלא בעת טעינה
+            // btnFullScreen.click(); // בקשה למסך מלא בעת טעינה
             loadTasksFromGitHub(); // Load tasks from GitHub on page load
         };
 
@@ -359,6 +359,11 @@
                 }
             });
             renderTasks();
+        });
+
+        btnSaveGitHub.addEventListener('click', () => {
+            console.log('Save button clicked!'); // Added for debugging
+            saveTasksToGitHub();
         });
 
     </script>
