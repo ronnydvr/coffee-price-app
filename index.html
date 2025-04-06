@@ -5,6 +5,18 @@
 </head>
 <body>
     <h1>מחיר הקפה:</h1>
-    <p id="coffee-price">13 שקל</p>
+    <p id="coffee-price">טוען...</p>
+
+    <script>
+        fetch('price.json')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('coffee-price').textContent = data.coffeePrice + ' שקל';
+            })
+            .catch(error => {
+                console.error('שגיאה בטעינת המחיר:', error);
+                document.getElementById('coffee-price').textContent = 'מחיר לא זמין';
+            });
+    </script>
 </body>
 </html>
